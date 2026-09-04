@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible defect in the Terraform configuration, APIM policy, or test scripts
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, subscription IDs, Terraform state, tenant data, access tokens, or vulnerability details. Use GitHub Private Vulnerability Reporting for security issues.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest sanitized sequence that reproduces the issue.
+    validations:
+      required: true
+  - type: input
+    id: terraform-version
+    attributes:
+      label: Terraform version
+      placeholder: 1.15.8
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Sanitized validation output
+      description: Include relevant output after removing all sensitive and environment-specific values.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed secrets, subscription IDs, Terraform state, tenant data, and other sensitive values.
+          required: true
+        - label: This report does not disclose a security vulnerability.
+          required: true

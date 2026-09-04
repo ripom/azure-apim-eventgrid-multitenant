@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose an improvement to the reference implementation
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation or use case should be addressed?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the desired behavior and affected Azure resources or interfaces.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact checks
+      options:
+        - label: I considered security, Azure cost, quotas, migration, and backward compatibility.
+          required: true
+        - label: I did not include credentials, Terraform state, tenant data, or other sensitive values.
+          required: true

@@ -1,0 +1,53 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Validation only: this workflow never runs terraform plan/apply or contacts Azure.
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.8"
+
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive
+
+      - name: Initialize Terraform
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform
+        run: terraform validate -no-color
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        # Parse the scripts without executing management calls or requiring Azure credentials.
+        run: |
+          $failed = $false
+          Get-ChildItem -Filter '*.ps1' | ForEach-Object {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $_.FullName,
+              [ref]$null,
+              [ref]$errors
+            ) | Out-Null
+
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              Write-Error "PowerShell syntax errors in $($_.Name): $($errors.Message -join '; ')"
+            }
+          }
+          if ($failed) { exit 1 }

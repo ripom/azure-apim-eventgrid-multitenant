@@ -1,0 +1,16 @@
+# Copy this file to a local variable file and provide all required values.
+
+azure_subscription_id  = "00000000-0000-0000-0000-000000000000"
+resource_group_name    = "my-eventgrid-rg"
+storage_account_name   = "myeventgridstorage"
+eventgrid_domain_name  = "my-eventgrid-domain"
+apim_name              = "my-eventgrid-apim"
+location               = "uksouth"
+
+common_tags = {
+  Environment = "development"
+}
+
+# The optional tenants map defaults to the tenantA, tenantB, and tenantC demo IDs.
+# A map key is the public tenant ID used by APIM and Event Grid; queue_name is its separate Storage Queue.
+# Override the map only to replace the complete tenant set. See CONFIGURATION.md for naming rules.
