@@ -71,6 +71,8 @@ See [TESTING.md](TESTING.md) for individual automatic scenarios, safe subscripti
 
 ## Architecture
 
+![Architecture overview showing tenant clients, the APIM authorization boundary, and isolated Event Grid topics and Storage Queues](assets/architecture-overview.png)
+
 ```mermaid
 flowchart LR
     Client[Tenant client] -->|Subscription key| APIM[Azure API Management]
@@ -87,6 +89,10 @@ The solution uses two separate trust boundaries:
 2. APIM authenticates to Event Grid with the user-assigned managed identity `apim-mi`.
 
 Event Grid credentials are never distributed to clients.
+
+### Authorization Flow
+
+![Authorization flow showing APIM rejecting a tenant mismatch with HTTP 403 and publishing authorized requests with its managed identity](assets/authorization-flow.png)
 
 ## Use Case
 
