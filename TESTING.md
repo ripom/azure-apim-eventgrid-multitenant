@@ -13,10 +13,22 @@ The repository uses one test runner, `test-solution.ps1`, for functional and sec
 
 Queue reads use `PeekMessages`, so test events are not consumed or deleted.
 
+## Authentication Options
+
+Terraform and the automated test runner use separate local authentication contexts:
+
+| Activity | Authentication | Notes |
+|---|---|---|
+| Terraform deployment | `az login` and `az account set` | Used by the `azurerm` and `azapi` providers for local interactive runs |
+| Automated `test-solution.ps1` execution | `Connect-AzAccount` and `Set-AzContext` | Required because the runner uses `Az.Accounts` and `Az.Storage` |
+| Manual HTTP test | APIM subscription key supplied to `curl.exe` | Does not require `Connect-AzAccount` when the key and deployment information are obtained manually |
+
+An Azure CLI login is not reused automatically by the Az PowerShell modules. If you do not want both command-line sessions, use the manual test procedure below and inspect the destination queue in the Azure portal. Portal access still requires an authorized Azure identity, but it does not require another command-line login.
+
 ## Prerequisites
 
 1. Deploy the current Terraform configuration successfully.
-2. Install PowerShell 7 and Terraform 1.15.8.
+2. Install PowerShell 7 and Terraform 1.15.8. Windows PowerShell 5.1 is not supported by the documented test procedures.
 3. Run the tests from this applied Terraform workspace, or from a workspace that can read the same state and `deployment_config` output.
 4. For `Delivery`, `TenantAccessControl`, and `All`, install `Az.Accounts` and `Az.Storage`, then authenticate to the Azure subscription configured in Terraform.
 
@@ -51,7 +63,7 @@ These roles are broader than the runner requires. For a production test identity
 
 The runner uses the retrieved Storage Account shared key to peek queue messages. Consequently, no separate Storage Queue data-plane role is required by the current implementation. Treat both retrieved keys as credentials with privileged access; the runner holds them only in process memory and does not print or persist them.
 
-The permissions above are for running tests, not deploying the solution. The deployment identity also needs permission to create all configured resources and role assignments. In a simple demo this is commonly `Contributor` plus `User Access Administrator` on the target resource group or subscription; `Owner` also covers both but is broader. It must also be allowed to purge the soft-deleted APIM service during `terraform destroy`.
+The permissions above are for running tests, not deploying the solution. The deployment identity also needs permission to create all configured resources and role assignments. In a simple demo this is commonly `Contributor` plus `User Access Administrator` on the target resource group; `Owner` at that scope also covers both but is broader. The destroy-time purge targets `Microsoft.ApiManagement/locations/deletedservices` beneath the subscription rather than the resource group, so the identity additionally needs permission for that delete operation at subscription scope. Assigning deployment roles only on the resource group does not authorize the purge.
 
 | Test mode | Terraform output | Azure login | APIM `listSecrets` | Storage `listKeys` |
 |---|---:|---:|---:|---:|
@@ -158,14 +170,26 @@ Run one scenario:
 
 ## Quick Manual Test With curl
 
-To publish one event manually through APIM, replace the placeholder values and run:
+This path avoids `Connect-AzAccount` and the Az PowerShell modules. Before starting:
+
+1. Run `terraform output -json deployment_config` to obtain the APIM name, API path, tenant IDs, and queue names from local Terraform state.
+2. In the Azure portal, open the deployed API Management service, select **Subscriptions**, open the subscription whose ID matches the tenant, and reveal either key.
+3. Keep the key out of source files, screenshots, terminal history, and shared logs.
+
+Enter the key into a temporary environment variable so it is not embedded in the command history, then publish one event:
 
 ```powershell
-curl.exe -i -X POST `
-	"https://<apim-name>.azure-api.net/<api-path>/<tenant-id>" `
-	-H "Content-Type: application/json" `
-	-H "Ocp-Apim-Subscription-Key: <apim-subscription-key>" `
-	-d '{"hello":"world"}'
+$env:APIM_SUBSCRIPTION_KEY = Read-Host "Paste the APIM subscription key" -MaskInput
+try {
+	curl.exe -i -X POST `
+		"https://<apim-name>.azure-api.net/<api-path>/<tenant-id>" `
+		-H "Content-Type: application/json" `
+		-H "Ocp-Apim-Subscription-Key: $env:APIM_SUBSCRIPTION_KEY" `
+		-d '{"hello":"world"}'
+}
+finally {
+	Remove-Item Env:APIM_SUBSCRIPTION_KEY -ErrorAction SilentlyContinue
+}
 ```
 
 Customize these values for the deployed environment and the tenant being tested:
@@ -178,13 +202,13 @@ Customize these values for the deployed environment and the tenant being tested:
 | `<apim-subscription-key>` | `example-key-from-apim` | The primary or secondary key of the APIM subscription whose ID is `<tenant-id>` |
 | JSON after `-d` | `{"hello":"world"}` | Any valid JSON payload required by the personal test |
 
-The APIM subscription key and route tenant must belong to the same tenant. A matching key and tenant should return HTTP `200`. To verify tenant isolation, keep the same key but change `<tenant-id>` to another configured tenant; the expected result is HTTP `403 Forbidden`.
+The APIM subscription key and route tenant must belong to the same tenant. A matching key and tenant should return HTTP `200`. To verify tenant isolation, repeat the request with the same key but change `<tenant-id>` to another configured tenant; the expected result is HTTP `403 Forbidden`.
 
-Do not commit a real key or include it in shared documentation. Supplying it directly in the command can also leave it in the local shell history.
+To verify end-to-end delivery, open the Storage Account in the Azure portal, select **Queues**, open the queue mapped to the tenant in `deployment_config.tenant_queues`, and inspect its messages for the submitted payload. Unlike the automated runner, this manual check is not correlated automatically and does not produce a consolidated pass/fail report.
 
-### Retrieve the key without adding it to shell history
+### Retrieve the key with Az PowerShell
 
-The following PowerShell example loads the applied values through `terraform-config.ps1`, retrieves the selected tenant key from APIM, and keeps it in an environment variable only for the duration of the request:
+If an Az PowerShell session is already active, the following example retrieves the selected tenant key from APIM and keeps it in an environment variable only for the duration of the request:
 
 ```powershell
 . .\terraform-config.ps1

@@ -14,7 +14,17 @@ The software is provided under the MIT License on an "AS IS" basis, without warr
 
 ## Quick Start
 
-Create an ignored local variable file from the public example, then replace the placeholder values for your environment. Terraform loads `terraform.tfvars` automatically.
+### Authenticate Terraform
+
+Terraform uses the Azure CLI session for local interactive authentication. Sign in and select the subscription that will contain the deployment:
+
+```powershell
+az login
+az account set --subscription "<azure-subscription-id>"
+az account show --query "{subscription:name, subscriptionId:id, tenantId:tenantId, user:user.name}" --output table
+```
+
+Create an ignored local variable file from the public example, replace its placeholders, and ensure `azure_subscription_id` matches the subscription selected above. Terraform loads `terraform.tfvars` automatically.
 
 ```powershell
 Copy-Item terraform.tfvars.example terraform.tfvars
@@ -23,20 +33,38 @@ terraform plan
 terraform apply
 ```
 
-Run the complete automated test suite after a successful apply:
+### Authenticate the Automated Test Runner
+
+The automated test runner uses the `Az.Accounts` and `Az.Storage` PowerShell modules. Azure CLI and Az PowerShell maintain separate authentication contexts, so `az login` does not authenticate the runner. After a successful apply, sign in with Az PowerShell and select the same subscription:
+
+```powershell
+Connect-AzAccount
+Set-AzContext -SubscriptionId "<azure-subscription-id>"
+Get-AzContext | Select-Object Account, Tenant, Subscription
+```
+
+Then run the complete automated test suite:
 
 ```powershell
 .\test-solution.ps1
 ```
 
-Run a manual request by replacing the APIM name, API path, tenant ID, and APIM subscription key with values from the deployed environment:
+### Manual Test Without the Second Login
+
+To avoid the separate `Connect-AzAccount` authentication, obtain the APIM subscription key from the Azure portal and run a manual request. Replace the APIM name, API path, and tenant ID with values from `terraform output -json deployment_config`:
 
 ```powershell
-curl.exe -i -X POST `
-  "https://<apim-name>.azure-api.net/<api-path>/<tenant-id>" `
-  -H "Content-Type: application/json" `
-  -H "Ocp-Apim-Subscription-Key: <apim-subscription-key>" `
-  -d '{"hello":"world"}'
+$env:APIM_SUBSCRIPTION_KEY = Read-Host "Paste the APIM subscription key" -MaskInput
+try {
+  curl.exe -i -X POST `
+    "https://<apim-name>.azure-api.net/<api-path>/<tenant-id>" `
+    -H "Content-Type: application/json" `
+    -H "Ocp-Apim-Subscription-Key: $env:APIM_SUBSCRIPTION_KEY" `
+    -d '{"hello":"world"}'
+}
+finally {
+  Remove-Item Env:APIM_SUBSCRIPTION_KEY -ErrorAction SilentlyContinue
+}
 ```
 
 See [TESTING.md](TESTING.md) for individual automatic scenarios, safe subscription-key retrieval, expected results, and the complete manual procedure.
@@ -96,18 +124,32 @@ This pattern is useful when a centralized ingress API must enforce tenant isolat
 ## Prerequisites
 
 - Terraform 1.15.8
-- PowerShell 7 recommended
-- Azure PowerShell modules: `Az.Accounts` and `Az.Storage`
+- PowerShell 7 for the included scripts and automated test runner
+- Azure CLI
+- Azure PowerShell modules `Az.Accounts` and `Az.Storage` only when using the automated test runner
 - Permission to create the resources and role assignments in the target Azure subscription
 
-Authenticate before deploying:
+Authenticate the Azure CLI before running Terraform:
+
+```powershell
+az login
+az account set --subscription "<azure-subscription-id>"
+az account show --query "{subscription:name, subscriptionId:id, tenantId:tenantId, user:user.name}" --output table
+```
+
+The `azure_subscription_id` value in the Terraform variable file must match the selected Azure CLI subscription. Terraform uses the Azure CLI session for local interactive authentication.
+
+The automated test runner uses the Az PowerShell modules instead. It requires a separate Az PowerShell session because `az login` and `Connect-AzAccount` do not share authentication contexts:
 
 ```powershell
 Connect-AzAccount
 Set-AzContext -SubscriptionId "<azure-subscription-id>"
+Get-AzContext | Select-Object Account, Tenant, Subscription
 ```
 
-Deployment and complete functional testing require Azure subscription access. Deployment commonly needs `Contributor` plus `User Access Administrator` at the target scope. Test-only operators need permission to list APIM subscription secrets and Storage Account keys; `Reader` alone is not sufficient. See [TESTING.md](TESTING.md#azure-access-required) for the per-test matrix, recommended scopes, and the source of tenant names, topics, queues, endpoints, and subscription keys.
+To avoid this second command-line authentication, test manually with `curl.exe`. Obtain the tenant APIM subscription key from the Azure portal and read the non-secret endpoint, API path, tenant, and queue names from `terraform output -json deployment_config`. The manual procedure does not use `test-solution.ps1`; see [Quick Manual Test With curl](TESTING.md#quick-manual-test-with-curl).
+
+Deployment and complete functional testing require Azure subscription access. Deployment commonly needs `Contributor` plus `User Access Administrator` on the target resource group. The destroy-time APIM purge additionally requires permission to delete `Microsoft.ApiManagement/locations/deletedservices` at subscription scope; a resource-group-only role assignment does not cover that resource. Test-only operators need permission to list APIM subscription secrets and Storage Account keys; `Reader` alone is not sufficient. See [TESTING.md](TESTING.md#azure-access-required) for the per-test matrix, recommended scopes, and the source of tenant names, topics, queues, endpoints, and subscription keys.
 
 ## Deploy
 

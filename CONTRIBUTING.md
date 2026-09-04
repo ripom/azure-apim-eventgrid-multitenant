@@ -2,7 +2,7 @@
 
 ## Development Setup
 
-Install Terraform 1.15.8 and PowerShell 7. For live Azure tests, install the `Az.Accounts` and `Az.Storage` modules.
+Install Terraform 1.15.8, Azure CLI, and PowerShell 7. Use `az login` for local Terraform operations. For live automated tests, install the `Az.Accounts` and `Az.Storage` modules and authenticate their separate context with `Connect-AzAccount`.
 
 Do not commit credentials, APIM keys, access tokens, `.tfvars`, Terraform state, or plan files.
 

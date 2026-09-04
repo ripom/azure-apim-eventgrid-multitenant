@@ -21,7 +21,7 @@ This is a demonstration project maintained on a best-effort basis. No response o
 
 The client authenticates to APIM. APIM authorizes the logical tenant before using its managed identity to publish to Event Grid. Event Grid sees APIM as the technical publisher, so cross-tenant authorization must complete before the policy executes `send-request`.
 
-Direct anonymous Event Grid publishing is expected to return HTTP `401`. Azure identities with an explicit `EventGrid Data Sender` role may publish directly by design.
+Direct anonymous Event Grid publishing is expected to return HTTP `401` or `403`; either response demonstrates that anonymous publishing was rejected. Azure identities with an explicit `EventGrid Data Sender` role may publish directly by design.
 
 ## Production Hardening
 
